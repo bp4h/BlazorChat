@@ -1,0 +1,74 @@
+﻿@page "/chat"
+@inject NavigationManager NavigationManager
+@rendermode InteractiveWebAssembly
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+<h3>Chat</h3>
+
+@if (IsConnected)
+{
+    <div>
+        <input type="text" @bind="messageInput" />
+        <button @onclick="Send">Send</button>
+    </div>
+
+    <ul id="messagesList">
+        @foreach (var message in messages)
+        {
+            <li>@message</li>
+        }
+    </ul>
+}
+else
+{
+    <span>Connecting...</span>
+}
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private string messageInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/chathub"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            var currentTime = DateTime.Now.ToString("dd.MM.yyyy HH:mm:ss");
+            var encodedMessage = $"[{currentTime}] {user}: {message}";
+            messages.Add(encodedMessage);
+            InvokeAsync(() => StateHasChanged());
+        });
+
+        hubConnection.On<string, string>("UserConnected", (connectionId, user) =>
+        {
+            var connectedMessage = $"{user} joined the chat";
+            messages.Add(connectedMessage);
+            InvokeAsync(() => StateHasChanged());
+        });
+
+        hubConnection.On<string, string>("UserDisconnected", (connectionId, user) =>
+        {
+            var disconnectedMessage = $"{user} has left the chat";
+            messages.Add(disconnectedMessage);
+            InvokeAsync(() => StateHasChanged());
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task Send()
+    {
+        if (IsConnected)
+        {
+            await hubConnection.SendAsync("SendMessage", messageInput);
+            messageInput = string.Empty;
+        }
+    }
+
+    public bool IsConnected => hubConnection.State == HubConnectionState.Connected;
+}
