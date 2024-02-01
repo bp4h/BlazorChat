@@ -58,6 +58,18 @@ else
             InvokeAsync(() => StateHasChanged());
         });
 
+        hubConnection.On<List<ChatMessage>>("LoadMessages", (loadedMessages) =>
+        {
+            messages.Clear();
+            foreach (var message in loadedMessages)
+            {
+                var currentTime = message.Timestamp.ToString("dd.MM.yyyy HH:mm:ss");
+                var encodedMessage = $"[{currentTime}] {message.User}: {message.Message}";
+                messages.Add(encodedMessage);
+            }
+            InvokeAsync(() => StateHasChanged());
+        });
+
         await hubConnection.StartAsync();
     }
 
